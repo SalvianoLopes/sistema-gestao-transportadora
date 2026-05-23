@@ -425,7 +425,7 @@ function EntradaDia(){
   async function loadRefs(){
     try{
       const[e,f]=await Promise.all([
-        db.get('equipe',{status:'ATIVO'},{select:'nome,funcao',order:'nome.asc'}),
+        db.get('equipe',{status:{op:'in',val:'(ATIVO,SERVICO_INTERNO)'}},{select:'nome,funcao',order:'nome.asc'}),
         db.get('frota',{},{select:'placa,tipo,status',order:'placa.asc'})
       ]);
       setEq(e);setFr(f);
