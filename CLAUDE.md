@@ -93,6 +93,16 @@ const NAV = [{k:'dashboard',...}, ..., {k:'escala', l:'📅 Escala'}, ...]
 - Peças: count de itens com tipo='peca', agrupado por descricao.trim().toUpperCase()
 
 ## Histórico de sessões
+### 2026-07-30
+**Retomada de desenvolvimento após ~2 meses parado (último commit era 23/05):**
+- **Causa raiz de "parou":** projeto Supabase (`pneakxdlbyuysjorhjdu`) estava com status `INACTIVE` (pausado automaticamente por inatividade, plano free). Restaurado via MCP. Precisou antes pausar outro projeto (`transvale-v1`) pra liberar vaga — conta free só permite 2 projetos ativos simultâneos.
+- **Achado de segurança — "demo" não é demo de verdade:** `sistema-gestao-transportadora.vercel.app` e `murici-ipiranga.vercel.app` são o **mesmo código do mesmo repositório GitHub**, sem nenhuma condição de hostname nas credenciais (`SURL`/`SKEY` hardcoded sem ternário, diferente do `_REAL` do Canais Críticos). O badge "MODO DEMO" (linha ~3235) é só cosmético. RLS confirmado aberto (`public`/`anon` FOR ALL) em praticamente todas as 15+ tabelas.
+- **Correção de premissa:** a decisão de risco aceito de 28/07 (ver CLAUDE.md raiz) achava que não tinha CPF exposto — **errado**, a tabela `equipe` tem CPF real de 31 colaboradores, também sem proteção nenhuma. Reapresentado ao Salviano com o dado correto — **reafirmou conscientemente manter como está por enquanto** (30/07/2026), foco é retomar o desenvolvimento primeiro.
+- **Limpeza (commit `0ca0153`):** removidos `fix_escala.js`/`replace_escala.js` (scripts de patch pontual de 13/05, já superados, usavam nomes de variável errados `SUPABASE_URL`/`SUPABASE_ANON_KEY`) e `.vercel/project.json.bak` (backup do link **errado**, apontava pro projeto demo antes da correção de 13/05 — mantido só confundiria). `CLAUDE.md` e `.vercel/project.json` versionados pela primeira vez.
+- **Validado:** dados presentes no banco restaurado (frota=12, equipe=74, entrada_diaria=346, escala_rascunho=65, pagamentos_recarga=60, manutencao_os=11, etc.) — `recargas` e `processos_especificos` vazios são esperados (aba Recargas usa `entrada_diaria`, não a tabela `recargas`).
+- **Não verificado ainda:** funcionamento visual real das 10 abas (sem navegador disponível na sessão) — recomendado o Salviano abrir o app e conferir.
+- **Backlog restante:** revisitar separação demo/real de verdade (login + RLS `authenticated`, mesmo padrão já aplicado no Canais Críticos/Inbursa hoje) — adiado por decisão do usuário; bump de versões CDN (React 18.2.0/jsPDF 2.5.1/xlsx 0.18.5) — baixa prioridade, nenhuma está quebrada.
+
 ### 2026-05-12
 - Implementada recarga manual (valor_recarga_manual_motorista/ajudante)
 
