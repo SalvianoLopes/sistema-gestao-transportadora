@@ -2,7 +2,7 @@
 
 ## Identificação
 - **App real:** https://murici-ipiranga.vercel.app
-- **Código:** `C:\Users\Desktop\portfolio\murici-ipiranga\index.html`
+- **Código:** `C:\Users\Desktop\portfolio\murici-ipiranga\index.html` (path de outra máquina/sessão); nesta máquina (Salviano, sessão 2026-08-11) foi clonado em `C:\Users\Salviano\Projetos\sistema-gestao-transportadora`
 - **GitHub:** `git@github.com:SalvianoLopes/-sistema-gestao-transportadora.git`
 - **Vercel project:** `prj_qiIMnKXbQeUqioLfXZYeI8fbhjLj` (project-xytnq)
 - **Supabase:** `pneakxdlbyuysjorhjdu` (murici-ipiranga, sa-east-1)
@@ -44,7 +44,7 @@ const NAV = [{k:'dashboard',...}, ..., {k:'escala', l:'📅 Escala'}, ...]
 | Entrada do Dia | entrada_diaria | CRUD + importação Excel |
 | Liberações | entrada_diaria | Visão do dia (padrão ao abrir) |
 | Descarga FEMSA | descarga_lancamento, descarga_ref | Reembolso paletes |
-| Frota | frota, manutencao | CRUD + manutenção |
+| Frota | frota, manutencao_os, manutencao_itens | Cadastro (doc., motorista fixo) + gestão de manutenção |
 | Equipe | equipe | CRUD colaboradores |
 | **Escala** | **escala_rascunho** | Filtro por data, CRUD, export Excel |
 | Recargas | entrada_diaria | Timeline + fechamento |
@@ -73,26 +73,43 @@ const NAV = [{k:'dashboard',...}, ..., {k:'escala', l:'📅 Escala'}, ...]
 ## Aba Manutenção — detalhes
 
 ### Tabelas Supabase
-- **manutencao_os**: id, placa, data_entrada, data_retorno, oficina, status (ABERTO/CONCLUIDO), km_entrada, km_retorno, observacoes, created_at
+- **frota**: (ver seção 5.2 no DOSSIE — desatualizado) agora também tem `marca`, `ano`, `venc_licenciamento`, `venc_seguro`. `tipo` deixou de ter CHECK (era só VAN/VUC, agora livre — curado na UI: VAN/VUC/TOCO/TRUCK/CARRETA/UTILITARIO/OUTRO). `status` aceita `INATIVO` além de ATIVO/MANUTENCAO/AGUARDANDO_PECA/LIBERADO — no formulário de Frota só ATIVO/INATIVO são selecionáveis manualmente, MANUTENCAO é automático (setado pelo fluxo de OS)
+- **manutencao_os**: id, placa (FK → frota.placa, adicionada 2026-08-11), data_entrada, data_retorno, oficina, status (ABERTO/CONCLUIDO), km_entrada, km_retorno, observacoes, created_at, **motorista_id** (FK equipe — quem dirigia no momento da quebra, é o que conta no ranking de ofensores), **motorista_oficina_id** (FK equipe — quem levou o veículo até a oficina, opcional, só informativo — papel distinto do motorista_id), **previsao_saida** (date), **categoria_falha** (CHECK: Motor/Freios/Baia-Sider/Suspensão/Elétrica/Pneus/Troca de Óleo-Preventiva/Colisão-Mau uso), **valor_total** (numeric, editável tanto na abertura quanto no fechamento da OS, já que o custo real geralmente só é conhecido no retorno)
 - **manutencao_itens**: id, os_id (FK → manutencao_os), placa, tipo (peca/servico), descricao, quantidade, data_troca, created_at
+- Existe uma tabela legada `manutencao` (schema antigo, pré-refactor de maio/2026) com ~10 registros órfãos, não usada pelo app — deixada de fora do escopo intencionalmente
 
 ### Fluxo
-1. "+ Novo Envio" → abre OS em manutencao_os + marca frota como MANUTENCAO
+1. "+ Novo Envio" → abre OS em manutencao_os (com motorista, previsão, categoria, valor opcional) + marca frota como MANUTENCAO
 2. "📦 Itens / Peças" → modal para adicionar peças/serviços à OS (manutencao_itens)
-3. "✓ Retornou" → fecha OS (status=CONCLUIDO) + marca frota como ATIVO
+3. "✓ Retornou" → fecha OS (status=CONCLUIDO), permite confirmar/ajustar valor_total final + marca frota como ATIVO
 
 ### Tabs da aba
 - **Ativas**: cards com cor por criticidade (azul <10d, laranja 10-19d, amarelo 20-29d, vermelho 30d+) + KPIs
 - **Histórico**: tabela expansível por linha — clica na linha para ver peças/serviços daquela OS
-- **Análises**: ranking de veículos por frequência de manutenção + top 10 peças mais trocadas
+- **Análises**: 6 cards + gráfico de barras — ver abaixo
 
 ### Análises — como funciona
-- Carrega todos os registros de manutencao_os + manutencao_itens em memória
+- Carrega todos os registros de manutencao_os + manutencao_itens + equipe em memória
 - Agrupamento feito em JS (sem GROUP BY no banco)
-- Frequência: count de OS por placa + dias médios (só OS concluídas)
-- Peças: count de itens com tipo='peca', agrupado por descricao.trim().toUpperCase()
+- **Frequência de quebras por mês**: agrupa `data_entrada` por `YYYY-MM`, barras de `<div>` (sem lib de gráfico — projeto não tem canvas/chart lib)
+- **Frequência por Veículo**: count de OS por placa + dias médios (só OS concluídas)
+- **Maior Downtime**: ranking por soma total de dias parados por placa (não só média)
+- **Maior Custo Acumulado**: ranking por soma de `valor_total` por placa
+- **Ofensores por Motorista**: agrupa por `motorista_id` (quebra, não quem levou à oficina) → nome via `equipe`
+- **Categorias de Falha**: contagem + % por `categoria_falha`
+- **Peças Mais Trocadas**: count de itens com tipo='peca', agrupado por descricao.trim().toUpperCase()
 
 ## Histórico de sessões
+### 2026-08-11
+**Refatoração Frota/Manutenção + Análises expandidas (pedido do Salviano, via Claude Code na pasta local "Murici Control Tower" — repo real clonado nessa sessão pela primeira vez, ver seção Identificação):**
+- **Frota**: adicionados `marca`, `ano`, `venc_licenciamento`, `venc_seguro` (com aviso visual se vencido/vence em ≤30d); `motorista_fixo_id` (já existia no schema desde o refactor de maio, nunca tinha UI) e `km_atual` agora editáveis no formulário; `tipo` deixou de ter CHECK restrito a VAN/VUC (curado só na UI agora); `status` manual restrito a ATIVO/INATIVO — MANUTENCAO só é setado automaticamente pelo fluxo de OS
+- **Manutenção (OS)**: adicionados `motorista_id` (quem dirigia na quebra), `motorista_oficina_id` (quem levou à oficina — campo separado, adicionado numa 2ª rodada depois que o Salviano apontou que são papéis diferentes), `previsao_saida`, `categoria_falha`, `valor_total` (editável na abertura e no fechamento)
+- **Schema**: FK `manutencao_os.placa → frota.placa` adicionada — fechou o gap que causou o incidente `FYE0A48` (23/05, ver mais abaixo); precisou backfillar `FYE0A48` em `frota` como `INATIVO` antes de conseguir criar a FK, já que a OS antiga referenciava uma placa nunca cadastrada
+- **Análises**: expandida de 2 para 6 cards + gráfico de barras mensal (ver seção "Aba Manutenção — detalhes" acima)
+- **Achado**: tabela legada `manutencao` (schema pré-refactor de maio, ~10 registros) segue órfã, não usada pelo app — decisão consciente de não mexer, fora de escopo
+- **Verificação**: testado com Playwright (Chromium headless via `npx playwright`, instalado nessa sessão pois não havia browser automation disponível na máquina) contra o Supabase real, local e em produção — 0 erros de console nas duas rodadas
+- Deploy: 2 commits (`3f4680c` schema+UI principal, `a438a6a` fix do campo de motorista duplo) + `vercel deploy --prod` via CLI (precisou `npx vercel` com login por device code — sessão não tinha credenciais salvas)
+
 ### 2026-07-30
 **Retomada de desenvolvimento após ~2 meses parado (último commit era 23/05):**
 - **Causa raiz de "parou":** projeto Supabase (`pneakxdlbyuysjorhjdu`) estava com status `INACTIVE` (pausado automaticamente por inatividade, plano free). Restaurado via MCP. Precisou antes pausar outro projeto (`transvale-v1`) pra liberar vaga — conta free só permite 2 projetos ativos simultâneos.
