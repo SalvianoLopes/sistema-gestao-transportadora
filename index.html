@@ -181,7 +181,7 @@ const Ldg=()=>h('div',{className:'lding'},h('div',{className:'sp'}),'Carregando.
 const Emp=({i='📭',t='Sem dados'})=>h('div',{className:'emp'},h('div',{style:{fontSize:36,opacity:.3}},i),h('div',null,t));
 
 const Bs=({s})=>{
-  const M={'ATIVO':['bg','● Ativo'],'MANUTENCAO':['by','🔧 Manut.'],'PE':['bb','📋 PE'],'AGUARDANDO_PECA':['br','⏳ Aguard.'],'LIBERADO':['bb','✓ Lib.'],'DESLIGADO':['bk','✕ Deslig.'],'JUSTA_CAUSA':['br','⚠ J.Causa'],'AFASTADO':['by','~ Afastado'],'1ª Saída':['bg','1ª Saída'],'Recarga':['br','⟳ Recarga'],'MOTORISTA':['bb','Motorista'],'AJUDANTE':['bg','Ajudante'],'COORDENADOR':['br','Coord.'],'ADM':['bk','ADM'],'VAN':['bb','VAN'],'VUC':['bg','VUC']};
+  const M={'ATIVO':['bg','● Ativo'],'MANUTENCAO':['by','🔧 Manut.'],'PE':['bb','📋 PE'],'AGUARDANDO_PECA':['br','⏳ Aguard.'],'LIBERADO':['bb','✓ Lib.'],'DESLIGADO':['bk','✕ Deslig.'],'JUSTA_CAUSA':['br','⚠ J.Causa'],'AFASTADO':['by','~ Afastado'],'INATIVO':['bk','✕ Inativo'],'1ª Saída':['bg','1ª Saída'],'Recarga':['br','⟳ Recarga'],'MOTORISTA':['bb','Motorista'],'AJUDANTE':['bg','Ajudante'],'COORDENADOR':['br','Coord.'],'ADM':['bk','ADM'],'VAN':['bb','VAN'],'VUC':['bg','VUC']};
   const[c,l]=M[s]||['bk',s||'—'];return h('span',{className:`badge ${c}`},l)
 };
 const Ob=({o})=>{if(!o)return h('span',{style:{color:'var(--t3)'}},'—');if(o.includes('1ª'))return h('span',{className:'badge bb'},'1ª Onda');if(o.includes('2ª'))return h('span',{className:'badge bg'},'2ª Onda');return h('span',{className:'badge by'},'3ª Onda')};
@@ -1112,17 +1112,47 @@ function EntradaDia(){
 
 
 /* FROTA */
+const TIPOS_VEICULO=['VAN','VUC','TOCO','TRUCK','CARRETA','UTILITARIO','OUTRO'];
+const CATEGORIAS_FALHA=['Motor','Freios','Baia/Sider','Suspensão','Elétrica','Pneus','Troca de Óleo/Preventiva','Colisão/Mau uso'];
+const emptyFrota={placa:'',marca:'',modelo:'',ano:'',tipo:'VAN',status:'ATIVO',motorista_fixo_id:'',km_atual:'',venc_licenciamento:'',venc_seguro:'',obs:''};
+function vencStatus(d){
+  if(!d)return null;
+  const dias=Math.round((new Date(d)-new Date(iso()))/86400000);
+  if(dias<0)return{cor:'var(--red)',txt:'Vencido'};
+  if(dias<=30)return{cor:'var(--yel)',txt:`Vence em ${dias}d`};
+  return null;
+}
 function Frota(){
-  const[rows,setRows]=useState([]);const[ld,setLd]=useState(true);const[modal,setModal]=useState(false);const[saving,setSaving]=useState(false);
-  const[F,setF]=useState({placa:'',modelo:'',tipo:'VAN',status:'ATIVO',obs:''});
+  const[rows,setRows]=useState([]);const[mots,setMots]=useState([]);const[ld,setLd]=useState(true);const[modal,setModal]=useState(false);const[saving,setSaving]=useState(false);
+  const[F,setF]=useState(emptyFrota);
   useEffect(()=>{load()},[]);
-  async function load(){setLd(true);try{const d=await db.get('frota',{},{order:'tipo.asc,placa.asc'});setRows(d)}catch(e){}setLd(false)}
-  async function salvarV(){if(!F.placa){toast('Placa obrigatória','err');return}setSaving(true);try{if(F.id)await db.patch('frota',F.id,F);else await db.post('frota',F);toast('Salvo!');setModal(false);load()}catch(e){toast('Erro: '+e.message,'err')}setSaving(false)}
-  const at=rows.filter(f=>f.status==='ATIVO'),mn=rows.filter(f=>f.status!=='ATIVO');
+  async function load(){
+    setLd(true);
+    try{
+      const[d,m]=await Promise.all([
+        db.get('frota',{},{order:'tipo.asc,placa.asc'}),
+        db.get('equipe',{funcao:'MOTORISTA',status:'ATIVO'},{select:'id,nome',order:'nome.asc'})
+      ]);
+      setRows(d);setMots(m);
+    }catch(e){}
+    setLd(false);
+  }
+  async function salvarV(){
+    if(!F.placa){toast('Placa obrigatória','err');return}
+    setSaving(true);
+    try{
+      const p={...F,ano:F.ano?parseInt(F.ano):null,km_atual:F.km_atual?parseInt(F.km_atual):null,motorista_fixo_id:F.motorista_fixo_id||null,venc_licenciamento:F.venc_licenciamento||null,venc_seguro:F.venc_seguro||null};
+      if(F.id)await db.patch('frota',F.id,p);else await db.post('frota',p);
+      toast('Salvo!');setModal(false);load();
+    }catch(e){toast('Erro: '+e.message,'err')}
+    setSaving(false);
+  }
+  const at=rows.filter(f=>f.status==='ATIVO'),mn=rows.filter(f=>f.status==='MANUTENCAO');
+  const nomeMotorista=id=>mots.find(m=>m.id===id)?.nome||'—';
   return h('div',null,
     h('div',{className:'sh'},
       h('div',null,h('h1',{className:'st'},'Cadastro de ',h('span',null,'Frota')),h('div',{className:'ss'},`${rows.length} veículos · ${at.length} ativos · manutenção gerenciada na aba 🔧`)),
-      h('button',{className:'btn btn-r',onClick:()=>{setF({placa:'',modelo:'',tipo:'VAN',status:'ATIVO',obs:''});setModal(true)}},'+ Cadastrar')
+      h('button',{className:'btn btn-r',onClick:()=>{setF(emptyFrota);setModal(true)}},'+ Cadastrar')
     ),
     h('div',{className:'kg'},
       h('div',{className:'kc g'},h('div',{className:'kl'},'Ativos'),h('div',{className:'kv'},at.length)),
@@ -1131,15 +1161,26 @@ function Frota(){
       h('div',{className:'kc r'},h('div',{className:'kl'},'VUC'),h('div',{className:'kv'},rows.filter(f=>f.tipo==='VUC').length))
     ),
     ld?h(Ldg):h('div',{className:'card'},h('div',{className:'tw'},h('table',null,
-      h('thead',null,h('tr',null,h('th',null,'Placa'),h('th',null,'Modelo'),h('th',null,'Tipo'),h('th',null,'Status'),h('th',null,'Observações'),h('th',null,''))),
-      h('tbody',null,rows.map(v=>h('tr',{key:v.id},
-        h('td',{className:'b m'},v.placa),
-        h('td',null,v.modelo||'—'),
-        h('td',null,h(Bs,{s:v.tipo})),
-        h('td',null,h(Bs,{s:v.status})),
-        h('td',{style:{maxWidth:280,whiteSpace:'normal',fontSize:11,color:'var(--t3)'}},v.obs||'—'),
-        h('td',null,h('button',{className:'btn btn-o btn-xs',onClick:()=>{setF({...v});setModal(true)}},'✏️'))
-      )))
+      h('thead',null,h('tr',null,h('th',null,'Placa'),h('th',null,'Marca/Modelo'),h('th',null,'Ano'),h('th',null,'Tipo'),h('th',null,'Status'),h('th',null,'Motorista Fixo'),h('th',null,'KM Atual'),h('th',null,'Documentação'),h('th',null,''))),
+      h('tbody',null,rows.map(v=>{
+        const vl=vencStatus(v.venc_licenciamento),vs=vencStatus(v.venc_seguro);
+        return h('tr',{key:v.id},
+          h('td',{className:'b m'},v.placa),
+          h('td',null,[v.marca,v.modelo].filter(Boolean).join(' ')||'—'),
+          h('td',{className:'m'},v.ano||'—'),
+          h('td',null,h(Bs,{s:v.tipo})),
+          h('td',null,h(Bs,{s:v.status})),
+          h('td',null,v.motorista_fixo_id?nomeMotorista(v.motorista_fixo_id):'—'),
+          h('td',{className:'m'},v.km_atual?fmt(v.km_atual):'—'),
+          h('td',{style:{fontSize:11}},
+            !vl&&!vs?'—':h('div',null,
+              vl&&h('div',{style:{color:vl.cor}},'Licenc.: '+vl.txt),
+              vs&&h('div',{style:{color:vs.cor}},'Seguro: '+vs.txt)
+            )
+          ),
+          h('td',null,h('button',{className:'btn btn-o btn-xs',onClick:()=>{setF({...emptyFrota,...v,ano:v.ano||'',km_atual:v.km_atual||'',motorista_fixo_id:v.motorista_fixo_id||'',venc_licenciamento:v.venc_licenciamento||'',venc_seguro:v.venc_seguro||''});setModal(true)}},'✏️'))
+        )
+      }))
     ))),
     modal&&h('div',{className:'ov'},
       h('div',{className:'mod'},
@@ -1147,11 +1188,23 @@ function Frota(){
         h('div',{className:'mb'},
           h('div',{className:'r2'},
             h('div',{className:'fg'},h('label',{className:'lbl'},'Placa'),h('input',{type:'text',value:F.placa,onChange:e=>setF(f=>({...f,placa:e.target.value.toUpperCase()}))})),
+            h('div',{className:'fg'},h('label',{className:'lbl'},'Tipo'),h('select',{value:F.tipo,onChange:e=>setF(f=>({...f,tipo:e.target.value}))},TIPOS_VEICULO.map(t=>h('option',{key:t,value:t},t))))
+          ),
+          h('div',{className:'r2'},
+            h('div',{className:'fg'},h('label',{className:'lbl'},'Marca'),h('input',{type:'text',value:F.marca||'',onChange:e=>setF(f=>({...f,marca:e.target.value}))})),
             h('div',{className:'fg'},h('label',{className:'lbl'},'Modelo'),h('input',{type:'text',value:F.modelo||'',onChange:e=>setF(f=>({...f,modelo:e.target.value}))}))
           ),
           h('div',{className:'r2'},
-            h('div',{className:'fg'},h('label',{className:'lbl'},'Tipo'),h('select',{value:F.tipo,onChange:e=>setF(f=>({...f,tipo:e.target.value}))},h('option',{value:'VAN'},'VAN'),h('option',{value:'VUC'},'VUC'))),
-            h('div',{className:'fg'},h('label',{className:'lbl'},'Status'),h('select',{value:F.status,onChange:e=>setF(f=>({...f,status:e.target.value}))},h('option',{value:'ATIVO'},'Ativo'),h('option',{value:'MANUTENCAO'},'Manutenção')))
+            h('div',{className:'fg'},h('label',{className:'lbl'},'Ano'),h('input',{type:'number',value:F.ano||'',onChange:e=>setF(f=>({...f,ano:e.target.value}))})),
+            h('div',{className:'fg'},h('label',{className:'lbl'},'KM Atual'),h('input',{type:'number',value:F.km_atual||'',onChange:e=>setF(f=>({...f,km_atual:e.target.value}))}))
+          ),
+          h('div',{className:'r2'},
+            h('div',{className:'fg'},h('label',{className:'lbl'},'Status'),h('select',{value:F.status==='MANUTENCAO'?'MANUTENCAO':F.status,onChange:e=>setF(f=>({...f,status:e.target.value})),disabled:F.status==='MANUTENCAO'},F.status==='MANUTENCAO'&&h('option',{value:'MANUTENCAO'},'Em Manutenção (automático)'),h('option',{value:'ATIVO'},'Ativo'),h('option',{value:'INATIVO'},'Inativo'))),
+            h('div',{className:'fg'},h('label',{className:'lbl'},'Motorista Fixo'),h('select',{value:F.motorista_fixo_id||'',onChange:e=>setF(f=>({...f,motorista_fixo_id:e.target.value}))},h('option',{value:''},'— Nenhum —'),mots.map(m=>h('option',{key:m.id,value:m.id},m.nome))))
+          ),
+          h('div',{className:'r2'},
+            h('div',{className:'fg'},h('label',{className:'lbl'},'Vencimento Licenciamento'),h('input',{type:'date',value:F.venc_licenciamento||'',onChange:e=>setF(f=>({...f,venc_licenciamento:e.target.value}))})),
+            h('div',{className:'fg'},h('label',{className:'lbl'},'Vencimento Seguro'),h('input',{type:'date',value:F.venc_seguro||'',onChange:e=>setF(f=>({...f,venc_seguro:e.target.value}))}))
           ),
           h('div',{className:'fg'},h('label',{className:'lbl'},'Observações'),h('textarea',{value:F.obs||'',onChange:e=>setF(f=>({...f,obs:e.target.value}))}))
         ),
@@ -2878,18 +2931,20 @@ function GestaoManutencao(){
   const[os,setOs]=useState([]);
   const[hist,setHist]=useState([]);
   const[frota,setFrota]=useState([]);
+  const[mots,setMots]=useState([]);
   const[ld,setLd]=useState(true);
   const[ldH,setLdH]=useState(false);
   const[modalOS,setModalOS]=useState(false);
   const[saving,setSaving]=useState(false);
-  const[F,setF]=useState({placa:'',data_entrada:iso(),km_entrada:'',oficina:'',observacoes:''});
+  const emptyOS={placa:'',data_entrada:iso(),km_entrada:'',oficina:'',observacoes:'',motorista_id:'',previsao_saida:'',categoria_falha:'',valor_total:''};
+  const[F,setF]=useState(emptyOS);
   const[osAtual,setOsAtual]=useState(null);
   const[itens,setItens]=useState([]);
   const[ldItens,setLdItens]=useState(false);
   const[FI,setFI]=useState({tipo:'peca',descricao:'',quantidade:'1',data_troca:iso()});
   const[savingItem,setSavingItem]=useState(false);
   const[osRetorno,setOsRetorno]=useState(null);
-  const[FR,setFR]=useState({data_retorno:iso(),km_retorno:'',obs:''});
+  const[FR,setFR]=useState({data_retorno:iso(),km_retorno:'',obs:'',valor_total:''});
   const[savingR,setSavingR]=useState(false);
   const[analises,setAnalises]=useState(null);
   const[ldA,setLdA]=useState(false);
@@ -2903,14 +2958,16 @@ function GestaoManutencao(){
   async function loadAtivas(){
     setLd(true);
     try{
-      const[d,fr]=await Promise.all([
+      const[d,fr,m]=await Promise.all([
         db.get('manutencao_os',{status:'ABERTO'},{order:'data_entrada.asc'}),
-        db.get('frota',{},{select:'placa,tipo',order:'placa.asc'})
+        db.get('frota',{},{select:'placa,tipo',order:'placa.asc'}),
+        db.get('equipe',{funcao:'MOTORISTA',status:'ATIVO'},{select:'id,nome',order:'nome.asc'})
       ]);
-      setOs(d);setFrota(fr);
+      setOs(d);setFrota(fr);setMots(m);
     }catch(e){toast('Erro ao carregar','err')}
     setLd(false);
   }
+  const nomeMotorista=id=>mots.find(m=>m.id===id)?.nome||'—';
 
   async function loadHist(){
     setLdH(true);
@@ -2921,20 +2978,27 @@ function GestaoManutencao(){
   async function loadAnalises(){
     setLdA(true);
     try{
-      const[allOs,allItens]=await Promise.all([
+      const[allOs,allItens,eq]=await Promise.all([
         db.get('manutencao_os',{},{order:'data_entrada.desc'}),
-        db.get('manutencao_itens',{},{order:'created_at.desc'})
+        db.get('manutencao_itens',{},{order:'created_at.desc'}),
+        db.get('equipe',{},{select:'id,nome'})
       ]);
+      const nome=id=>eq.find(e=>e.id===id)?.nome||'—';
       const byPlaca={};
       allOs.forEach(o=>{
-        if(!byPlaca[o.placa])byPlaca[o.placa]={placa:o.placa,total:0,conc:0,dias:0};
+        if(!byPlaca[o.placa])byPlaca[o.placa]={placa:o.placa,total:0,conc:0,dias:0,custo:0};
         byPlaca[o.placa].total++;
+        byPlaca[o.placa].custo+=Number(o.valor_total)||0;
         if(o.status==='CONCLUIDO'&&o.data_entrada&&o.data_retorno){
           byPlaca[o.placa].conc++;
           byPlaca[o.placa].dias+=Math.round((new Date(o.data_retorno)-new Date(o.data_entrada))/86400000);
         }
       });
-      const topPlacas=Object.values(byPlaca).sort((a,b)=>b.total-a.total).slice(0,8).map(v=>({...v,dm:v.conc>0?Math.round(v.dias/v.conc):null}));
+      const placas=Object.values(byPlaca).map(v=>({...v,dm:v.conc>0?Math.round(v.dias/v.conc):null}));
+      const topPlacas=[...placas].sort((a,b)=>b.total-a.total).slice(0,8);
+      const topDowntime=[...placas].filter(v=>v.dias>0).sort((a,b)=>b.dias-a.dias).slice(0,8);
+      const topCusto=[...placas].filter(v=>v.custo>0).sort((a,b)=>b.custo-a.custo).slice(0,8);
+
       const byPeca={};
       allItens.filter(i=>i.tipo==='peca').forEach(i=>{
         const k=i.descricao.trim().toUpperCase();
@@ -2943,7 +3007,33 @@ function GestaoManutencao(){
         byPeca[k].veic.add(i.placa);
       });
       const topPecas=Object.values(byPeca).sort((a,b)=>b.qtd-a.qtd).slice(0,10).map(v=>({...v,veic:v.veic.size}));
-      setAnalises({topPlacas,topPecas,totalOs:allOs.length,conc:allOs.filter(o=>o.status==='CONCLUIDO').length,totalItens:allItens.length});
+
+      const byMotorista={};
+      allOs.filter(o=>o.motorista_id).forEach(o=>{
+        if(!byMotorista[o.motorista_id])byMotorista[o.motorista_id]={nome:nome(o.motorista_id),total:0};
+        byMotorista[o.motorista_id].total++;
+      });
+      const topMotoristas=Object.values(byMotorista).sort((a,b)=>b.total-a.total).slice(0,8);
+
+      const byCategoria={};
+      allOs.filter(o=>o.categoria_falha).forEach(o=>{
+        byCategoria[o.categoria_falha]=(byCategoria[o.categoria_falha]||0)+1;
+      });
+      const comCategoria=allOs.filter(o=>o.categoria_falha).length;
+      const categorias=Object.entries(byCategoria).map(([cat,qtd])=>({cat,qtd,pct:comCategoria>0?Math.round(qtd/comCategoria*100):0})).sort((a,b)=>b.qtd-a.qtd);
+
+      const byMes={};
+      allOs.filter(o=>o.data_entrada).forEach(o=>{
+        const mes=o.data_entrada.slice(0,7);
+        byMes[mes]=(byMes[mes]||0)+1;
+      });
+      const porMes=Object.entries(byMes).sort((a,b)=>a[0].localeCompare(b[0])).slice(-12).map(([mes,qtd])=>({mes,qtd}));
+
+      setAnalises({
+        topPlacas,topDowntime,topCusto,topPecas,topMotoristas,categorias,porMes,
+        totalOs:allOs.length,conc:allOs.filter(o=>o.status==='CONCLUIDO').length,totalItens:allItens.length,
+        custoTotal:allOs.reduce((a,o)=>a+(Number(o.valor_total)||0),0)
+      });
     }catch(e){toast('Erro nas análises','err')}
     setLdA(false);
   }
@@ -2966,11 +3056,16 @@ function GestaoManutencao(){
     if(!F.placa){toast('Selecione a placa','err');return}
     setSaving(true);
     try{
-      await db.post('manutencao_os',{placa:F.placa,data_entrada:F.data_entrada,oficina:F.oficina||null,km_entrada:F.km_entrada?parseInt(F.km_entrada):null,status:'ABERTO',observacoes:F.observacoes||null});
+      await db.post('manutencao_os',{
+        placa:F.placa,data_entrada:F.data_entrada,oficina:F.oficina||null,
+        km_entrada:F.km_entrada?parseInt(F.km_entrada):null,status:'ABERTO',observacoes:F.observacoes||null,
+        motorista_id:F.motorista_id||null,previsao_saida:F.previsao_saida||null,
+        categoria_falha:F.categoria_falha||null,valor_total:F.valor_total?parseFloat(F.valor_total):0
+      });
       await db.patchWhere('frota','placa',F.placa,{status:'MANUTENCAO'});
       toast('OS criada!');
       setModalOS(false);
-      setF({placa:'',data_entrada:iso(),km_entrada:'',oficina:'',observacoes:''});
+      setF(emptyOS);
       loadAtivas();
     }catch(e){toast('Erro: '+e.message,'err')}
     setSaving(false);
@@ -3004,11 +3099,11 @@ function GestaoManutencao(){
     try{
       const obsAtual=osRetorno.observacoes||'';
       const obsFinal=FR.obs?(obsAtual?obsAtual+'\nRetorno: '+FR.obs:'Retorno: '+FR.obs):obsAtual;
-      await db.patch('manutencao_os',osRetorno.id,{data_retorno:FR.data_retorno,km_retorno:FR.km_retorno?parseInt(FR.km_retorno):null,status:'CONCLUIDO',observacoes:obsFinal||null});
+      await db.patch('manutencao_os',osRetorno.id,{data_retorno:FR.data_retorno,km_retorno:FR.km_retorno?parseInt(FR.km_retorno):null,status:'CONCLUIDO',observacoes:obsFinal||null,valor_total:FR.valor_total!==''?parseFloat(FR.valor_total):osRetorno.valor_total||0});
       await db.patchWhere('frota','placa',osRetorno.placa,{status:'ATIVO'});
       toast(`${osRetorno.placa} retornou!`);
       setOsRetorno(null);
-      setFR({data_retorno:iso(),km_retorno:'',obs:''});
+      setFR({data_retorno:iso(),km_retorno:'',obs:'',valor_total:''});
       loadAtivas();
     }catch(e){toast('Erro: '+e.message,'err')}
     setSavingR(false);
@@ -3047,13 +3142,17 @@ function GestaoManutencao(){
             ),
             h('div',{style:{display:'flex',gap:6}},
               h('button',{className:'btn btn-o btn-sm',onClick:()=>{setOsAtual(o);setItens([]);setFI({tipo:'peca',descricao:'',quantidade:'1',data_troca:iso()});loadItens(o.id)}},'📦 Itens / Peças'),
-              h('button',{className:'btn btn-g btn-sm',onClick:()=>{setOsRetorno(o);setFR({data_retorno:iso(),km_retorno:'',obs:''})}},'✓ Retornou')
+              h('button',{className:'btn btn-g btn-sm',onClick:()=>{setOsRetorno(o);setFR({data_retorno:iso(),km_retorno:'',obs:'',valor_total:o.valor_total||''})}},'✓ Retornou')
             )
           ),
           h('div',{style:{padding:'12px 17px',display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(170px,1fr))',gap:10}},
             h('div',null,h('div',{className:'kl'},'Entrada'),h('div',{style:{fontWeight:600,color:'var(--t1)'}},fd(o.data_entrada))),
+            o.previsao_saida&&h('div',null,h('div',{className:'kl'},'Previsão Saída'),h('div',{style:{fontWeight:600,color:'var(--t1)'}},fd(o.previsao_saida))),
+            o.motorista_id&&h('div',null,h('div',{className:'kl'},'Motorista'),h('div',{style:{fontWeight:600,color:'var(--t1)'}},nomeMotorista(o.motorista_id))),
+            o.categoria_falha&&h('div',null,h('div',{className:'kl'},'Categoria'),h('span',{className:'badge bb'},o.categoria_falha)),
             o.oficina&&h('div',null,h('div',{className:'kl'},'Oficina'),h('div',{style:{fontWeight:600,color:'var(--t1)'}},o.oficina)),
             o.km_entrada&&h('div',null,h('div',{className:'kl'},'KM Entrada'),h('div',{style:{fontWeight:600,color:'var(--t1)',fontFamily:"'JetBrains Mono',monospace"}},fmt(o.km_entrada))),
+            !!o.valor_total&&h('div',null,h('div',{className:'kl'},'Valor'),h('div',{style:{fontWeight:600,color:'var(--red)'}},R(o.valor_total))),
             o.observacoes&&h('div',{style:{gridColumn:'1/-1'}},h('div',{className:'kl'},'Observações'),h('div',{style:{fontSize:11,color:'var(--t2)',lineHeight:1.5}},o.observacoes))
           )
         )
@@ -3065,7 +3164,7 @@ function GestaoManutencao(){
         h('div',{className:'fb'},h('div',{className:'fg2'},h('label',{className:'lbl'},'Filtrar Placa'),h('input',{type:'text',placeholder:'Ex: ABC1234',value:filtPlaca,onChange:e=>setFiltPlaca(e.target.value),style:{width:160}}))),
         histFilt.length===0?h(Emp,{i:'📋',t:'Nenhum registro ainda'}):
         h('div',{className:'card'},h('div',{className:'tw'},h('table',null,
-          h('thead',null,h('tr',null,h('th',null,'Placa'),h('th',null,'Entrada'),h('th',null,'Retorno'),h('th',null,'Dias'),h('th',null,'Oficina'),h('th',null,'KM Entr.'),h('th',null,'KM Ret.'),h('th',null,'Status'),h('th',null,''))),
+          h('thead',null,h('tr',null,h('th',null,'Placa'),h('th',null,'Entrada'),h('th',null,'Retorno'),h('th',null,'Dias'),h('th',null,'Motorista'),h('th',null,'Categoria'),h('th',null,'Oficina'),h('th',null,'KM Entr.'),h('th',null,'KM Ret.'),h('th',null,'Valor'),h('th',null,'Status'),h('th',null,''))),
           h('tbody',null,histFilt.flatMap(o=>{
             const dias=o.data_retorno?Math.round((new Date(o.data_retorno)-new Date(o.data_entrada))/86400000):calcDias(o.data_entrada);
             const iH=itensHist[o.id];
@@ -3076,14 +3175,17 @@ function GestaoManutencao(){
                 h('td',{className:'m'},fd(o.data_entrada)),
                 h('td',{className:'m'},fd(o.data_retorno)),
                 h('td',{className:'m',style:{color:dias>=20?'var(--red)':dias>=10?'var(--yel)':'var(--t2)',fontWeight:dias>=20?700:400}},dias+'d'),
+                h('td',null,o.motorista_id?nomeMotorista(o.motorista_id):'—'),
+                h('td',null,o.categoria_falha?h('span',{className:'badge bb',style:{fontSize:9}},o.categoria_falha):'—'),
                 h('td',null,o.oficina||'—'),
                 h('td',{className:'m'},o.km_entrada?fmt(o.km_entrada):'—'),
                 h('td',{className:'m'},o.km_retorno?fmt(o.km_retorno):'—'),
+                h('td',{className:'m'},o.valor_total?R(o.valor_total):'—'),
                 h('td',null,h('span',{className:`badge ${o.status==='CONCLUIDO'?'bg':'by'}`},o.status==='CONCLUIDO'?'Concluído':'Aberto')),
                 h('td',null,h('span',{style:{fontSize:10,color:'var(--t3)'}},isExp?'▲':'▼'))
               ),
               isExp&&h('tr',{key:o.id+'_exp'},
-                h('td',{colSpan:9,style:{background:'var(--s2)',padding:'13px 17px'}},
+                h('td',{colSpan:12,style:{background:'var(--s2)',padding:'13px 17px'}},
                   iH===undefined?h('div',{style:{color:'var(--t3)',fontSize:12}},'Carregando itens...'):
                   iH.length===0?h('div',{style:{color:'var(--t3)',fontSize:12}},'Nenhum item registrado nesta OS.'):
                   h('div',null,
@@ -3111,9 +3213,24 @@ function GestaoManutencao(){
           h('div',{className:'kc b'},h('div',{className:'kl'},'Total OS'),h('div',{className:'kv'},analises.totalOs)),
           h('div',{className:'kc g'},h('div',{className:'kl'},'Concluídas'),h('div',{className:'kv'},analises.conc)),
           h('div',{className:'kc y'},h('div',{className:'kl'},'Em Aberto'),h('div',{className:'kv'},analises.totalOs-analises.conc)),
-          h('div',{className:'kc r'},h('div',{className:'kl'},'Total Itens Reg.'),h('div',{className:'kv'},analises.totalItens))
+          h('div',{className:'kc r'},h('div',{className:'kl'},'Custo Total'),h('div',{className:'kv',style:{fontSize:20}},R(analises.custoTotal)))
         ),
-        h('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16}},
+        analises.porMes.length>0&&h('div',{className:'card',style:{marginBottom:16}},
+          h('div',{className:'ch'},h('span',{className:'ct'},'📅 Frequência de Quebras por Mês')),
+          h('div',{style:{padding:'14px 17px',display:'flex',flexDirection:'column',gap:8}},
+            analises.porMes.map(m=>{
+              const max=Math.max(...analises.porMes.map(x=>x.qtd),1);
+              return h('div',{key:m.mes,style:{display:'flex',alignItems:'center',gap:10}},
+                h('div',{style:{width:56,fontSize:11,color:'var(--t2)',fontFamily:"'JetBrains Mono',monospace"}},m.mes),
+                h('div',{style:{flex:1,background:'var(--s2)',borderRadius:4,overflow:'hidden',height:16}},
+                  h('div',{style:{width:`${m.qtd/max*100}%`,background:'var(--red)',height:'100%',borderRadius:4}})
+                ),
+                h('div',{style:{width:24,fontSize:11,fontWeight:700,color:'var(--t1)',textAlign:'right'}},m.qtd)
+              )
+            })
+          )
+        ),
+        h('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(320px,1fr))',gap:16}},
           h('div',{className:'card'},
             h('div',{className:'ch'},h('span',{className:'ct'},'🚛 Frequência por Veículo')),
             analises.topPlacas.length===0?h(Emp,{i:'🚛',t:'Sem dados ainda'}):
@@ -3126,6 +3243,56 @@ function GestaoManutencao(){
                 h('td',{className:'m'},v.dm!=null?v.dm+'d':'—')
               )))
             ))
+          ),
+          h('div',{className:'card'},
+            h('div',{className:'ch'},h('span',{className:'ct'},'⏱️ Maior Downtime (dias parados)')),
+            analises.topDowntime.length===0?h(Emp,{i:'⏱️',t:'Sem dados ainda'}):
+            h('div',{className:'tw'},h('table',null,
+              h('thead',null,h('tr',null,h('th',null,'Placa'),h('th',null,'Dias Parado (total)'),h('th',null,'OS Concluídas'))),
+              h('tbody',null,analises.topDowntime.map((v,i)=>h('tr',{key:v.placa},
+                h('td',{className:'b m'},medal(i)+v.placa),
+                h('td',{className:'m',style:{color:'var(--red)',fontWeight:700}},v.dias+'d'),
+                h('td',{className:'m'},v.conc)
+              )))
+            ))
+          ),
+          h('div',{className:'card'},
+            h('div',{className:'ch'},h('span',{className:'ct'},'💰 Maior Custo Acumulado')),
+            analises.topCusto.length===0?h(Emp,{i:'💰',t:'Nenhum valor registrado ainda'}):
+            h('div',{className:'tw'},h('table',null,
+              h('thead',null,h('tr',null,h('th',null,'Placa'),h('th',null,'Custo Total'),h('th',null,'OS'))),
+              h('tbody',null,analises.topCusto.map((v,i)=>h('tr',{key:v.placa},
+                h('td',{className:'b m'},medal(i)+v.placa),
+                h('td',{className:'m',style:{color:'var(--red)',fontWeight:700}},R(v.custo)),
+                h('td',{className:'m'},v.total)
+              )))
+            ))
+          ),
+          h('div',{className:'card'},
+            h('div',{className:'ch'},h('span',{className:'ct'},'👤 Ofensores por Motorista')),
+            analises.topMotoristas.length===0?h(Emp,{i:'👤',t:'Nenhuma OS com motorista vinculado ainda'}):
+            h('div',{className:'tw'},h('table',null,
+              h('thead',null,h('tr',null,h('th',null,'Motorista'),h('th',null,'Manutenções Vinculadas'))),
+              h('tbody',null,analises.topMotoristas.map((v,i)=>h('tr',{key:v.nome},
+                h('td',{className:'b'},medal(i)+v.nome),
+                h('td',{className:'m',style:{color:'var(--yel)',fontWeight:700}},v.total)
+              )))
+            ))
+          ),
+          h('div',{className:'card'},
+            h('div',{className:'ch'},h('span',{className:'ct'},'🏷️ Categorias de Falha')),
+            analises.categorias.length===0?h(Emp,{i:'🏷️',t:'Nenhuma categoria registrada ainda'}):
+            h('div',{style:{padding:'12px 17px',display:'flex',flexDirection:'column',gap:8}},
+              analises.categorias.map(c=>h('div',{key:c.cat},
+                h('div',{style:{display:'flex',justifyContent:'space-between',fontSize:11,marginBottom:3}},
+                  h('span',{style:{color:'var(--t1)',fontWeight:600}},c.cat),
+                  h('span',{style:{color:'var(--t3)'}},`${c.qtd} · ${c.pct}%`)
+                ),
+                h('div',{style:{background:'var(--s2)',borderRadius:4,overflow:'hidden',height:8}},
+                  h('div',{style:{width:`${c.pct}%`,background:'var(--blu)',height:'100%',borderRadius:4}})
+                )
+              ))
+            )
           ),
           h('div',{className:'card'},
             h('div',{className:'ch'},h('span',{className:'ct'},'🔩 Peças Mais Trocadas')),
@@ -3146,12 +3313,22 @@ function GestaoManutencao(){
       h('div',{className:'mod'},
         h('div',{className:'mh'},h('div',{className:'mt'},'🔧 Novo Envio para Manutenção'),h('button',{className:'btn btn-o btn-xs',onClick:()=>setModalOS(false)},'✕')),
         h('div',{className:'mb'},
-          h('div',{className:'fg'},h('label',{className:'lbl'},'Placa'),h('select',{value:F.placa,onChange:e=>setF(f=>({...f,placa:e.target.value}))},h('option',{value:''},'— Selecione a placa —'),frota.map(v=>h('option',{key:v.placa,value:v.placa},`${v.placa}  (${v.tipo})`)))),
+          h('div',{className:'r2'},
+            h('div',{className:'fg'},h('label',{className:'lbl'},'Placa'),h('select',{value:F.placa,onChange:e=>setF(f=>({...f,placa:e.target.value}))},h('option',{value:''},'— Selecione a placa —'),frota.map(v=>h('option',{key:v.placa,value:v.placa},`${v.placa}  (${v.tipo})`)))),
+            h('div',{className:'fg'},h('label',{className:'lbl'},'Motorista'),h('select',{value:F.motorista_id,onChange:e=>setF(f=>({...f,motorista_id:e.target.value}))},h('option',{value:''},'— Selecione —'),mots.map(m=>h('option',{key:m.id,value:m.id},m.nome))))
+          ),
           h('div',{className:'r2'},
             h('div',{className:'fg'},h('label',{className:'lbl'},'Data Entrada'),h('input',{type:'date',value:F.data_entrada,onChange:e=>setF(f=>({...f,data_entrada:e.target.value}))})),
-            h('div',{className:'fg'},h('label',{className:'lbl'},'KM Entrada'),h('input',{type:'number',placeholder:'Ex: 45800',value:F.km_entrada,onChange:e=>setF(f=>({...f,km_entrada:e.target.value}))}))
+            h('div',{className:'fg'},h('label',{className:'lbl'},'Previsão de Saída'),h('input',{type:'date',value:F.previsao_saida,onChange:e=>setF(f=>({...f,previsao_saida:e.target.value}))}))
           ),
-          h('div',{className:'fg'},h('label',{className:'lbl'},'Oficina'),h('select',{value:F.oficina,onChange:e=>setF(f=>({...f,oficina:e.target.value}))},h('option',{value:''},'— Selecione —'),['Oficina Murici','Oficina Central','Outro'].map(o=>h('option',{key:o,value:o},o)))),
+          h('div',{className:'r2'},
+            h('div',{className:'fg'},h('label',{className:'lbl'},'KM Entrada'),h('input',{type:'number',placeholder:'Ex: 45800',value:F.km_entrada,onChange:e=>setF(f=>({...f,km_entrada:e.target.value}))})),
+            h('div',{className:'fg'},h('label',{className:'lbl'},'Oficina'),h('select',{value:F.oficina,onChange:e=>setF(f=>({...f,oficina:e.target.value}))},h('option',{value:''},'— Selecione —'),['Oficina Murici','Oficina Central','Outro'].map(o=>h('option',{key:o,value:o},o))))
+          ),
+          h('div',{className:'r2'},
+            h('div',{className:'fg'},h('label',{className:'lbl'},'Categoria da Falha'),h('select',{value:F.categoria_falha,onChange:e=>setF(f=>({...f,categoria_falha:e.target.value}))},h('option',{value:''},'— Selecione —'),CATEGORIAS_FALHA.map(c=>h('option',{key:c,value:c},c)))),
+            h('div',{className:'fg'},h('label',{className:'lbl'},'Valor Total (R$)'),h('input',{type:'number',step:'0.01',placeholder:'Se já souber o valor',value:F.valor_total,onChange:e=>setF(f=>({...f,valor_total:e.target.value}))}))
+          ),
           h('div',{className:'fg'},h('label',{className:'lbl'},'Problema / Observações'),h('textarea',{value:F.observacoes,onChange:e=>setF(f=>({...f,observacoes:e.target.value})),placeholder:'Descreva o problema identificado...'}))
         ),
         h('div',{className:'mf'},h('button',{className:'btn btn-o',onClick:()=>setModalOS(false)},'Cancelar'),h('button',{className:'btn btn-r',onClick:criarOS,disabled:saving},saving?'Salvando...':'✓ Registrar Envio'))
@@ -3204,6 +3381,7 @@ function GestaoManutencao(){
             h('div',{className:'fg'},h('label',{className:'lbl'},'Data de Retorno'),h('input',{type:'date',value:FR.data_retorno,onChange:e=>setFR(f=>({...f,data_retorno:e.target.value}))})),
             h('div',{className:'fg'},h('label',{className:'lbl'},'KM Retorno'),h('input',{type:'number',placeholder:'Ex: 46200',value:FR.km_retorno,onChange:e=>setFR(f=>({...f,km_retorno:e.target.value}))}))
           ),
+          h('div',{className:'fg'},h('label',{className:'lbl'},'Valor Total da Manutenção (R$)'),h('input',{type:'number',step:'0.01',value:FR.valor_total,onChange:e=>setFR(f=>({...f,valor_total:e.target.value}))})),
           h('div',{className:'fg'},h('label',{className:'lbl'},'Observações Finais'),h('textarea',{value:FR.obs,onChange:e=>setFR(f=>({...f,obs:e.target.value})),placeholder:'Ex: Pendências, garantia, próxima revisão...'}))
         ),
         h('div',{className:'mf'},h('button',{className:'btn btn-o',onClick:()=>setOsRetorno(null)},'Cancelar'),h('button',{className:'btn btn-r',onClick:registrarRetorno,disabled:savingR},savingR?'Salvando...':'✓ Confirmar Retorno'))
