@@ -2936,7 +2936,7 @@ function GestaoManutencao(){
   const[ldH,setLdH]=useState(false);
   const[modalOS,setModalOS]=useState(false);
   const[saving,setSaving]=useState(false);
-  const emptyOS={placa:'',data_entrada:iso(),km_entrada:'',oficina:'',observacoes:'',motorista_id:'',previsao_saida:'',categoria_falha:'',valor_total:''};
+  const emptyOS={placa:'',data_entrada:iso(),km_entrada:'',oficina:'',observacoes:'',motorista_id:'',motorista_oficina_id:'',previsao_saida:'',categoria_falha:'',valor_total:''};
   const[F,setF]=useState(emptyOS);
   const[osAtual,setOsAtual]=useState(null);
   const[itens,setItens]=useState([]);
@@ -3059,7 +3059,7 @@ function GestaoManutencao(){
       await db.post('manutencao_os',{
         placa:F.placa,data_entrada:F.data_entrada,oficina:F.oficina||null,
         km_entrada:F.km_entrada?parseInt(F.km_entrada):null,status:'ABERTO',observacoes:F.observacoes||null,
-        motorista_id:F.motorista_id||null,previsao_saida:F.previsao_saida||null,
+        motorista_id:F.motorista_id||null,motorista_oficina_id:F.motorista_oficina_id||null,previsao_saida:F.previsao_saida||null,
         categoria_falha:F.categoria_falha||null,valor_total:F.valor_total?parseFloat(F.valor_total):0
       });
       await db.patchWhere('frota','placa',F.placa,{status:'MANUTENCAO'});
@@ -3148,7 +3148,8 @@ function GestaoManutencao(){
           h('div',{style:{padding:'12px 17px',display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(170px,1fr))',gap:10}},
             h('div',null,h('div',{className:'kl'},'Entrada'),h('div',{style:{fontWeight:600,color:'var(--t1)'}},fd(o.data_entrada))),
             o.previsao_saida&&h('div',null,h('div',{className:'kl'},'Previsão Saída'),h('div',{style:{fontWeight:600,color:'var(--t1)'}},fd(o.previsao_saida))),
-            o.motorista_id&&h('div',null,h('div',{className:'kl'},'Motorista'),h('div',{style:{fontWeight:600,color:'var(--t1)'}},nomeMotorista(o.motorista_id))),
+            o.motorista_id&&h('div',null,h('div',{className:'kl'},'Motorista (na quebra)'),h('div',{style:{fontWeight:600,color:'var(--t1)'}},nomeMotorista(o.motorista_id))),
+            o.motorista_oficina_id&&h('div',null,h('div',{className:'kl'},'Levou à Oficina'),h('div',{style:{fontWeight:600,color:'var(--t1)'}},nomeMotorista(o.motorista_oficina_id))),
             o.categoria_falha&&h('div',null,h('div',{className:'kl'},'Categoria'),h('span',{className:'badge bb'},o.categoria_falha)),
             o.oficina&&h('div',null,h('div',{className:'kl'},'Oficina'),h('div',{style:{fontWeight:600,color:'var(--t1)'}},o.oficina)),
             o.km_entrada&&h('div',null,h('div',{className:'kl'},'KM Entrada'),h('div',{style:{fontWeight:600,color:'var(--t1)',fontFamily:"'JetBrains Mono',monospace"}},fmt(o.km_entrada))),
@@ -3164,7 +3165,7 @@ function GestaoManutencao(){
         h('div',{className:'fb'},h('div',{className:'fg2'},h('label',{className:'lbl'},'Filtrar Placa'),h('input',{type:'text',placeholder:'Ex: ABC1234',value:filtPlaca,onChange:e=>setFiltPlaca(e.target.value),style:{width:160}}))),
         histFilt.length===0?h(Emp,{i:'📋',t:'Nenhum registro ainda'}):
         h('div',{className:'card'},h('div',{className:'tw'},h('table',null,
-          h('thead',null,h('tr',null,h('th',null,'Placa'),h('th',null,'Entrada'),h('th',null,'Retorno'),h('th',null,'Dias'),h('th',null,'Motorista'),h('th',null,'Categoria'),h('th',null,'Oficina'),h('th',null,'KM Entr.'),h('th',null,'KM Ret.'),h('th',null,'Valor'),h('th',null,'Status'),h('th',null,''))),
+          h('thead',null,h('tr',null,h('th',null,'Placa'),h('th',null,'Entrada'),h('th',null,'Retorno'),h('th',null,'Dias'),h('th',null,'Motorista (quebra)'),h('th',null,'Levou Oficina'),h('th',null,'Categoria'),h('th',null,'Oficina'),h('th',null,'KM Entr.'),h('th',null,'KM Ret.'),h('th',null,'Valor'),h('th',null,'Status'),h('th',null,''))),
           h('tbody',null,histFilt.flatMap(o=>{
             const dias=o.data_retorno?Math.round((new Date(o.data_retorno)-new Date(o.data_entrada))/86400000):calcDias(o.data_entrada);
             const iH=itensHist[o.id];
@@ -3176,6 +3177,7 @@ function GestaoManutencao(){
                 h('td',{className:'m'},fd(o.data_retorno)),
                 h('td',{className:'m',style:{color:dias>=20?'var(--red)':dias>=10?'var(--yel)':'var(--t2)',fontWeight:dias>=20?700:400}},dias+'d'),
                 h('td',null,o.motorista_id?nomeMotorista(o.motorista_id):'—'),
+                h('td',null,o.motorista_oficina_id?nomeMotorista(o.motorista_oficina_id):'—'),
                 h('td',null,o.categoria_falha?h('span',{className:'badge bb',style:{fontSize:9}},o.categoria_falha):'—'),
                 h('td',null,o.oficina||'—'),
                 h('td',{className:'m'},o.km_entrada?fmt(o.km_entrada):'—'),
@@ -3185,7 +3187,7 @@ function GestaoManutencao(){
                 h('td',null,h('span',{style:{fontSize:10,color:'var(--t3)'}},isExp?'▲':'▼'))
               ),
               isExp&&h('tr',{key:o.id+'_exp'},
-                h('td',{colSpan:12,style:{background:'var(--s2)',padding:'13px 17px'}},
+                h('td',{colSpan:13,style:{background:'var(--s2)',padding:'13px 17px'}},
                   iH===undefined?h('div',{style:{color:'var(--t3)',fontSize:12}},'Carregando itens...'):
                   iH.length===0?h('div',{style:{color:'var(--t3)',fontSize:12}},'Nenhum item registrado nesta OS.'):
                   h('div',null,
@@ -3269,7 +3271,7 @@ function GestaoManutencao(){
             ))
           ),
           h('div',{className:'card'},
-            h('div',{className:'ch'},h('span',{className:'ct'},'👤 Ofensores por Motorista')),
+            h('div',{className:'ch'},h('span',{className:'ct'},'👤 Ofensores por Motorista (na quebra)')),
             analises.topMotoristas.length===0?h(Emp,{i:'👤',t:'Nenhuma OS com motorista vinculado ainda'}):
             h('div',{className:'tw'},h('table',null,
               h('thead',null,h('tr',null,h('th',null,'Motorista'),h('th',null,'Manutenções Vinculadas'))),
@@ -3313,9 +3315,10 @@ function GestaoManutencao(){
       h('div',{className:'mod'},
         h('div',{className:'mh'},h('div',{className:'mt'},'🔧 Novo Envio para Manutenção'),h('button',{className:'btn btn-o btn-xs',onClick:()=>setModalOS(false)},'✕')),
         h('div',{className:'mb'},
+          h('div',{className:'fg'},h('label',{className:'lbl'},'Placa'),h('select',{value:F.placa,onChange:e=>setF(f=>({...f,placa:e.target.value}))},h('option',{value:''},'— Selecione a placa —'),frota.map(v=>h('option',{key:v.placa,value:v.placa},`${v.placa}  (${v.tipo})`)))),
           h('div',{className:'r2'},
-            h('div',{className:'fg'},h('label',{className:'lbl'},'Placa'),h('select',{value:F.placa,onChange:e=>setF(f=>({...f,placa:e.target.value}))},h('option',{value:''},'— Selecione a placa —'),frota.map(v=>h('option',{key:v.placa,value:v.placa},`${v.placa}  (${v.tipo})`)))),
-            h('div',{className:'fg'},h('label',{className:'lbl'},'Motorista'),h('select',{value:F.motorista_id,onChange:e=>setF(f=>({...f,motorista_id:e.target.value}))},h('option',{value:''},'— Selecione —'),mots.map(m=>h('option',{key:m.id,value:m.id},m.nome))))
+            h('div',{className:'fg'},h('label',{className:'lbl'},'Motorista (dirigindo na quebra)'),h('select',{value:F.motorista_id,onChange:e=>setF(f=>({...f,motorista_id:e.target.value}))},h('option',{value:''},'— Selecione —'),mots.map(m=>h('option',{key:m.id,value:m.id},m.nome)))),
+            h('div',{className:'fg'},h('label',{className:'lbl'},'Motorista (levou à oficina)'),h('select',{value:F.motorista_oficina_id,onChange:e=>setF(f=>({...f,motorista_oficina_id:e.target.value}))},h('option',{value:''},'— Se diferente / opcional —'),mots.map(m=>h('option',{key:m.id,value:m.id},m.nome))))
           ),
           h('div',{className:'r2'},
             h('div',{className:'fg'},h('label',{className:'lbl'},'Data Entrada'),h('input',{type:'date',value:F.data_entrada,onChange:e=>setF(f=>({...f,data_entrada:e.target.value}))})),
