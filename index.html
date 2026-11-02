@@ -132,9 +132,77 @@ td.m{font-family:"JetBrains Mono",monospace;font-size:11px}
 // ══════════════════════════════════════════════
 // API SUPABASE — FETCH DIRETO (sem CDN externo)
 // ══════════════════════════════════════════════
-const SURL = 'https://pneakxdlbyuysjorhjdu.supabase.co';
-const SKEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBuZWFreGRsYnl1eXNqb3JoamR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY1NTMwODIsImV4cCI6MjA5MjEyOTA4Mn0.U43ri8NtZVuxGANrslQ1GQTZ_hnNJ4dtAYCR9xMNTHk';
-const HDR = {'apikey':SKEY,'Authorization':'Bearer '+SKEY,'Content-Type':'application/json'};
+// Public preview: synthetic records, held only in memory and reset on reload.
+// This repository serves the public demo; operational deployment is separate.
+const DEMO_MODE = true;
+const demoData = (() => {
+  if (!DEMO_MODE) return {};
+  const tables = Object.fromEntries(['entrada_diaria','vendas_diarias','frota','equipe','escala_rascunho','descarga_ref','descarga_lancamento','despesas','manutencao_os','manutencao_itens','pagamentos_recarga'].map(t => [t, []]));
+  const date = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  const today = new Date();
+  const shift = n => { const d = new Date(today); d.setDate(d.getDate()+n); return date(d); };
+  for (let i=0; i<6; i++) {
+    tables.equipe.push({id:`demo-m${i}`,nome:`Motorista Demo ${i+1}`,matricula:`DEMO-M${i+1}`,funcao:'MOTORISTA',status:'ATIVO',data_admissao:'2026-03-01'});
+    tables.equipe.push({id:`demo-a${i}`,nome:`Ajudante Demo ${i+1}`,matricula:`DEMO-A${i+1}`,funcao:'AJUDANTE',status:'ATIVO',data_admissao:'2026-03-01'});
+    tables.frota.push({id:`demo-f${i}`,placa:`DEMO-0${i+1}`,tipo:i%2?'VUC':'VAN',status:i===5?'MANUTENCAO':'ATIVO',marca:'Veículo demonstrativo',ano:2024,km_atual:32000+i*1400,motorista_fixo_id:`demo-m${i}`});
+    tables.descarga_ref.push({id:`demo-c${i}`,matricula:`DEMO-C${i+1}`,razao_social:`Cliente Fictício ${i+1}`,canal:'Varejo',territorio:'Região demonstrativa',gerencia:'Demo',valor_pallet:25});
+  }
+  const dates = new Set();
+  for(let n=0;n<45;n++) dates.add(shift(-n));
+  for(const month of ['2026-03','2026-04','2026-05']) for(let n=1;n<=20;n++) dates.add(`${month}-${String(n).padStart(2,'0')}`);
+  for (const day of dates) {
+    tables.vendas_diarias.push({id:`demo-v-${day}`,data:day,venda_total:12600,obs:'Exemplo fictício'});
+    for(let i=0;i<6;i++) {
+      const route={id:`demo-e-${day}-${i}`,data:day,placa:tables.frota[i].placa,tipo_veiculo:tables.frota[i].tipo,motorista_nome:tables.equipe[i*2].nome,ajudante1_nome:tables.equipe[i*2+1].nome,ajudante2_nome:null,onda:`${i%3+1}ª Onda`,status_operacional:i===4?'Recarga':'1ª Saída',num_transporte:9000+i,rota:`Região ${i+1} — Demo`,qtd_caixas:120+i*18,num_clientes:8+i,km:45+i*12,cubos:8+i,horario_saida:`0${6+i%3}:15`,horario_chegada:'14:30',tempo_trabalhado_min:420,valor_motorista:i===4?50:0,valor_ajudante1:i===4?50:0,valor_ajudante2:0,venda_total_dia:2100,created_at:day+'T08:00:00Z'};
+      tables.entrada_diaria.push(route);
+      tables.escala_rascunho.push({id:`demo-s-${day}-${i}`,data:day,placa:route.placa,tipo:route.tipo_veiculo,motorista:route.motorista_nome,mat_mot:`DEMO-M${i+1}`,aj1:route.ajudante1_nome,mat_aj1:`DEMO-A${i+1}`,num_transp:String(9000+i),rota:route.rota});
+    }
+    tables.descarga_lancamento.push({id:`demo-d-${day}`,data:day,placa:tables.frota[0].placa,motorista_nome:tables.equipe[0].nome,num_transporte:'9000',rota:'Região 1 — Demo',matricula_cliente:'DEMO-C1',razao_social:'Cliente Fictício 1',canal:'Varejo',qtd_paletes:8,valor_pallet:25,reembolsavel:true,status_reembolso:'PENDENTE',created_at:day+'T10:00:00Z'});
+    tables.despesas.push({id:`demo-g-${day}`,data:day,motorista_nome:tables.equipe[0].nome,categoria:'Combustível',descricao:'Abastecimento demonstrativo',valor:180,status:'PENDENTE',num_transporte:'9000',rota:'Região 1 — Demo',created_at:day+'T10:00:00Z'});
+  }
+  tables.manutencao_os.push({id:'demo-os1',placa:tables.frota[5].placa,data_entrada:shift(-3),previsao_saida:shift(2),status:'ABERTO',oficina:'Oficina Fictícia',motorista_id:'demo-m5',categoria_falha:'Freios',valor_total:1250,km_entrada:39000,observacoes:'Registro fictício para demonstração'},{id:'demo-os2',placa:tables.frota[0].placa,data_entrada:shift(-15),data_retorno:shift(-12),status:'CONCLUIDO',oficina:'Oficina Fictícia',motorista_id:'demo-m0',categoria_falha:'Pneus',valor_total:800,km_entrada:31000,km_retorno:31010});
+  tables.manutencao_itens.push({id:'demo-item1',os_id:'demo-os1',placa:tables.frota[5].placa,tipo:'peca',descricao:'Pastilhas de freio — exemplo',quantidade:2,data_troca:shift(-2),created_at:shift(-2)+'T10:00:00Z'});
+  return tables;
+})();
+
+async function appFetch(input, options={}) {
+  const url = new URL(String(input), window.location.href);
+  // Fail closed: the public preview never falls through to the removed backend.
+  const match = url.pathname.match(/^\/rest\/v1\/([a-z_]+)$/);
+  if (!match || !Object.prototype.hasOwnProperty.call(demoData,match[1])) throw new Error('Recurso indisponível na demonstração');
+  const table=match[1], method=(options.method||'GET').toUpperCase();
+  const rows=demoData[table];
+  const matches = row => [...url.searchParams].every(([key,expr]) => {
+    if(['select','order','limit','offset'].includes(key)) return true;
+    const dot=expr.indexOf('.'), op=expr.slice(0,dot), val=expr.slice(dot+1), actual=String(row[key]??'');
+    if(op==='eq') return actual===val;
+    if(op==='gte') return actual>=val;
+    if(op==='lte') return actual<=val;
+    if(op==='gt') return actual>val;
+    if(op==='lt') return actual<val;
+    if(op==='in') return val.replace(/^\(|\)$/g,'').split(',').includes(actual);
+    if(op==='ilike') return actual.toLocaleLowerCase().includes(val.replace(/\*/g,'').toLocaleLowerCase());
+    throw new Error('Filtro indisponível na demonstração');
+  });
+  let result=rows.filter(matches);
+  if(method==='GET') {
+    const order=url.searchParams.get('order');
+    if(order) result.sort((a,b)=>{for(const part of order.split(',')){const [key,dir]=part.split('.'); const c=String(a[key]??'').localeCompare(String(b[key]??''),undefined,{numeric:true});if(c)return dir==='desc'?-c:c;}return 0;});
+    const limit=url.searchParams.get('limit'); if(limit) result=result.slice(0,Number(limit));
+  } else if(method==='POST') {
+    const payload=JSON.parse(options.body||'{}');
+    result=(Array.isArray(payload)?payload:[payload]).map(row=>({...row,id:row.id||`demo-${crypto.randomUUID()}`,created_at:new Date().toISOString()}));
+    rows.push(...result);
+  } else if(method==='PATCH') {
+    const payload=JSON.parse(options.body||'{}');result.forEach(row=>Object.assign(row,payload));
+  } else if(method==='DELETE') {
+    demoData[table]=rows.filter(row=>!matches(row));
+  } else throw new Error('Ação indisponível na demonstração');
+  return new Response(JSON.stringify(result),{status:200,headers:{'Content-Type':'application/json'}});
+}
+
+const SURL = 'https://demo.invalid';
+const HDR = {'Content-Type':'application/json'};
 
 const db = {
   async get(table, filters={}, opts={}) {
@@ -147,20 +215,24 @@ const db = {
     if (opts.order) url.searchParams.set('order', opts.order);
     if (opts.ilike) Object.entries(opts.ilike).forEach(([k,v]) => url.searchParams.set(k, `ilike.*${v}*`));
     if (opts.limit) url.searchParams.set('limit', opts.limit);
-    const r = await fetch(url.toString(), {headers: HDR});
+    const r = await appFetch(url.toString(), {headers: HDR});
     if (!r.ok) throw new Error(`DB ${r.status}: ${await r.text()}`);
     return r.json();
   },
   async post(table, data) {
-    const r = await fetch(`${SURL}/rest/v1/${table}`, {method:'POST',headers:{...HDR,'Prefer':'return=minimal'},body:JSON.stringify(data)});
+    const r = await appFetch(`${SURL}/rest/v1/${table}`, {method:'POST',headers:{...HDR,'Prefer':'return=minimal'},body:JSON.stringify(data)});
     if (!r.ok) throw new Error(await r.text());
   },
   async patch(table, id, data) {
-    const r = await fetch(`${SURL}/rest/v1/${table}?id=eq.${id}`, {method:'PATCH',headers:{...HDR,'Prefer':'return=minimal'},body:JSON.stringify(data)});
+    const r = await appFetch(`${SURL}/rest/v1/${table}?id=eq.${id}`, {method:'PATCH',headers:{...HDR,'Prefer':'return=minimal'},body:JSON.stringify(data)});
+    if (!r.ok) throw new Error(await r.text());
+  },
+  async del(table, id) {
+    const r = await appFetch(`${SURL}/rest/v1/${table}?id=eq.${id}`, {method:'DELETE',headers:HDR});
     if (!r.ok) throw new Error(await r.text());
   },
   async patchWhere(table, col, val, data) {
-    const r = await fetch(`${SURL}/rest/v1/${table}?${col}=eq.${encodeURIComponent(val)}`, {method:'PATCH',headers:{...HDR,'Prefer':'return=minimal'},body:JSON.stringify(data)});
+    const r = await appFetch(`${SURL}/rest/v1/${table}?${col}=eq.${encodeURIComponent(val)}`, {method:'PATCH',headers:{...HDR,'Prefer':'return=minimal'},body:JSON.stringify(data)});
     if (!r.ok) throw new Error(await r.text());
   }
 };
@@ -529,7 +601,7 @@ function EntradaDia(){
       const val=parseFloat(vendaInput);
       if(vendaDia&&vendaDia.id){
         // UPDATE - usa fetch direto pois db.patch usa id
-        const r=await fetch(`${SURL}/rest/v1/vendas_diarias?data=eq.${dt}`,
+        const r=await appFetch(`${SURL}/rest/v1/vendas_diarias?data=eq.${dt}`,
           {method:'PATCH',headers:{...HDR,'Prefer':'return=minimal'},
            body:JSON.stringify({venda_total:val,updated_at:new Date().toISOString()})});
         if(!r.ok)throw new Error(await r.text());
@@ -581,7 +653,7 @@ function EntradaDia(){
   // ─── EXCLUIR ─────────────────────────────────────────────
   async function excluir(id){
     try{
-      const r=await fetch(`${SURL}/rest/v1/entrada_diaria?id=eq.${id}`,
+      const r=await appFetch(`${SURL}/rest/v1/entrada_diaria?id=eq.${id}`,
         {method:'DELETE',headers:HDR});
       if(!r.ok)throw new Error(await r.text());
       toast('Registro excluído!');
@@ -1226,7 +1298,7 @@ function Escala(){
   useEffect(()=>{load()},[dt]);
   async function load(){setLd(true);try{const[d,f,e]=await Promise.all([db.get('escala_rascunho',{data:{op:'eq',val:dt}},{order:'placa.asc'}),db.get('frota',{},{select:'placa,tipo',order:'placa.asc'}),db.get('equipe',{status:{op:'eq',val:'ATIVO'}},{select:'nome,matricula,funcao',order:'funcao.asc,nome.asc'})]);setRows(d);setFr(f);setEq(e)}catch(e){}setLd(false)}
   async function salvar(){if(!F.placa||!F.motorista){toast('Placa e motorista obrigatórios','err');return}setSaving(true);try{const p={data:F.data,placa:F.placa,tipo:F.tipo,motorista:F.motorista,mat_mot:F.mat_mot||null,aj1:F.aj1||null,mat_aj1:F.mat_aj1||null,aj2:F.aj2||null,mat_aj2:F.mat_aj2||null,num_transp:F.num_transp||null,rota:F.rota||null};if(editId){await db.patch('escala_rascunho',editId,p);toast('Atualizado!')}else{await db.post('escala_rascunho',p);toast('Salvo!')}setModal(false);setEditId(null);setF(emptyF);load()}catch(e){toast('Erro: '+e.message,'err')}setSaving(false)}
-  async function excluir(id){if(!confirm('Excluir este registro?'))return;try{const r=await fetch(`${SURL}/rest/v1/escala_rascunho?id=eq.${id}`,{method:'DELETE',headers:HDR});if(!r.ok)throw new Error(await r.text());toast('Excluído!');load()}catch(e){toast('Erro: '+e.message,'err')}}
+  async function excluir(id){if(!confirm('Excluir este registro?'))return;try{const r=await appFetch(`${SURL}/rest/v1/escala_rascunho?id=eq.${id}`,{method:'DELETE',headers:HDR});if(!r.ok)throw new Error(await r.text());toast('Excluído!');load()}catch(e){toast('Erro: '+e.message,'err')}}
   function editar(row){setF({data:row.data||iso(),placa:row.placa||'',tipo:row.tipo||'VAN',motorista:row.motorista||'',mat_mot:row.mat_mot||'',aj1:row.aj1||'',mat_aj1:row.mat_aj1||'',aj2:row.aj2||'',mat_aj2:row.mat_aj2||'',num_transp:row.num_transp||'',rota:row.rota||''});setEditId(row.id);setModal(true)}
   function abrirNovo(){setF({...emptyF,data:dt});setEditId(null);setModal(true)}
   function expExcel(){
@@ -1413,7 +1485,7 @@ function Recargas(){
       url.searchParams.set('select','colaborador_nome,status,valor');
       url.searchParams.set('periodo_ini','eq.'+ini);
       url.searchParams.set('periodo_fim','eq.'+fim);
-      const r=await fetch(url.toString(),{headers:HDR});
+      const r=await appFetch(url.toString(),{headers:HDR});
       const recs=await r.json();
       const m={};
       if(Array.isArray(recs))recs.forEach(rec=>{if(rec.status==='PAGO')m[rec.colaborador_nome]=true;});
@@ -1431,7 +1503,7 @@ function Recargas(){
         valor:pago?(valor||null):null,
         data_pagamento:pago?new Date().toISOString():null
       });
-      const patch=await fetch(`${SURL}/rest/v1/pagamentos_recarga${filtro}`,{
+      const patch=await appFetch(`${SURL}/rest/v1/pagamentos_recarga${filtro}`,{
         method:'PATCH',
         headers:{...HDR,'Prefer':'return=representation'},
         body
@@ -1439,7 +1511,7 @@ function Recargas(){
       if(!patch.ok)throw new Error(await patch.text());
       const updated=await patch.json();
       if(!updated||updated.length===0){
-        const ins=await fetch(`${SURL}/rest/v1/pagamentos_recarga`,{
+        const ins=await appFetch(`${SURL}/rest/v1/pagamentos_recarga`,{
           method:'POST',
           headers:{...HDR,'Prefer':'return=minimal'},
           body
@@ -2013,7 +2085,7 @@ function Descarga(){
     try{
       const payload={matricula:FC.matricula.trim(),razao_social:FC.razao_social.trim().toUpperCase(),canal:FC.canal||'A DEFINIR',territorio:FC.territorio||'A DEFINIR',gerencia:FC.gerencia||'A DEFINIR',valor_pallet:parseFloat(FC.valor_pallet)||0};
       if(clienteEdit){
-        const r=await fetch(SURL+'/rest/v1/descarga_ref?matricula=eq.'+encodeURIComponent(FC.matricula),{method:'PATCH',headers:{...HDR,'Prefer':'return=minimal'},body:JSON.stringify(payload)});
+        const r=await appFetch(SURL+'/rest/v1/descarga_ref?matricula=eq.'+encodeURIComponent(FC.matricula),{method:'PATCH',headers:{...HDR,'Prefer':'return=minimal'},body:JSON.stringify(payload)});
         if(!r.ok)throw new Error(await r.text());
         toast('Cliente atualizado!');
       }else{
@@ -2030,7 +2102,7 @@ function Descarga(){
       const payload={status_reembolso:status};
       if(status==='REEMBOLSADO')payload.data_reembolso=iso();
       else payload.data_reembolso=null;
-      const r=await fetch(SURL+'/rest/v1/descarga_lancamento?id=eq.'+id,
+      const r=await appFetch(SURL+'/rest/v1/descarga_lancamento?id=eq.'+id,
         {method:'PATCH',headers:{...HDR,'Prefer':'return=minimal'},body:JSON.stringify(payload)});
       if(!r.ok)throw new Error(await r.text());
       toast(status==='REEMBOLSADO'?'✅ Marcado como PAGO!':'↩ Revertido para PENDENTE');
@@ -3086,7 +3158,7 @@ function GestaoManutencao(){
   async function delItem(id){
     if(!confirm('Remover este item?'))return;
     try{
-      const r=await fetch(`${SURL}/rest/v1/manutencao_itens?id=eq.${id}`,{method:'DELETE',headers:HDR});
+      const r=await appFetch(`${SURL}/rest/v1/manutencao_itens?id=eq.${id}`,{method:'DELETE',headers:HDR});
       if(!r.ok)throw new Error(await r.text());
       toast('Removido!');
       loadItens(osAtual.id);
@@ -3404,6 +3476,7 @@ function App(){
       h('div',{className:'logo'},h('div',{className:'logo-icon'},'M'),h('div',null,h('div',{className:'logo-text'},'Transportadora'),h('div',{className:'logo-sub'},'Gestão Operacional'))),
       h('div',{style:{fontSize:11,color:'var(--t3)',fontFamily:"'JetBrains Mono',monospace"}},dstr())
     ),
+    DEMO_MODE&&h('div',{role:'status',style:{padding:'10px 20px',background:'#24101b',color:'#ffb6ce',fontSize:13}},'Demonstração interativa com dados fictícios. Alterações ficam apenas nesta sessão e são descartadas ao recarregar. Sem conexão com a operação real.'),
     h('div',{className:'nav'},NAV.map(({k,l})=>h('button',{key:k,className:`nav-btn${page===k?' on':''}`,onClick:()=>setPage(k)},l))),
     h('div',{className:'main'},h(Page,{key:page}))
   )
@@ -3413,10 +3486,10 @@ ReactDOM.createRoot(document.getElementById('root')).render(h(App));
 </script>
 <script>
 (function(){
-  if(window.location.hostname!=='murici-ipiranga.vercel.app'){
+  if(true){
     var d=document.createElement('div');
     d.style.cssText='position:fixed;bottom:20px;right:20px;background:#e8195a;color:#fff;padding:5px 14px;border-radius:20px;font-size:11px;font-weight:700;letter-spacing:.5px;z-index:9999;box-shadow:0 2px 8px rgba(0,0,0,.35);pointer-events:none';
-    d.textContent='MODO DEMO';
+    d.textContent='DEMO · DADOS FICTÍCIOS';
     document.body.appendChild(d);
   }
 })();
