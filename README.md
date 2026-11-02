@@ -4,6 +4,12 @@ Sistema operacional completo desenvolvido para empresa do segmento de transporte
 
 ![Dashboard](https://img.shields.io/badge/status-demo-e8195a) ![Stack](https://img.shields.io/badge/stack-React%20%7C%20jsPDF%20%7C%20XLSX-06080f)
 
+## Demonstração pública
+
+Esta versão usa apenas dados fictícios gerados em memória. Não exige Supabase e não consulta ou altera dados da operação real. Cadastros, edições e exclusões são simulados na sessão e descartados ao recarregar a página. As bibliotecas de interface e exportação continuam sendo carregadas via CDN.
+
+O ambiente operacional da Murici é uma implantação separada. Este código é destinado à demonstração pública do portfólio.
+
 ## Funcionalidades
 
 - **Painel operacional** — visão do dia com volumes, receitas e indicadores em tempo real
